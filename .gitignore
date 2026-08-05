@@ -1,0 +1,28 @@
+# Node
+node_modules/
+**/node_modules/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Environment
+.env
+.env.*
+
+# Database
+*.db
+
+# Build
+build/
+dist/
+
+# Logs
+*.log
+
+ml/models/
+*.joblib
+
+# VS Code
+.vscode/

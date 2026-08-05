@@ -1,0 +1,13 @@
+{
+  "name": "phishguard",
+  "version": "1.0.0",
+  "description": "A full-stack phishing detection web application with React frontend, Node.js backend proxy, and Python ML models.",
+  "private": true,
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["phishing", "detection", "security", "ml", "react", "node"],
+  "author": "PhishGuard Team",
+  "license": "ISC",
+  "type": "commonjs"
+}
