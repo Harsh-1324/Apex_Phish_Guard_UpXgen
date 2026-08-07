@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const fetch = require('node-fetch');
 const { saveAnalysis, getAnalysisHistory, getAnalysisById } = require('./database');
 
@@ -79,16 +78,12 @@ app.get('/api/analysis/:id', async (req, res) => {
   }
 });
 
-const buildPath = path.join(__dirname, '../frontend/build');
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(buildPath));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(buildPath, 'index.html'));
-  });
-}
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'PhishGuard backend is online', version: '1.0.0' });
+    res.json({
+        status: 'PhishGuard backend is online',
+        version: '1.0.0'
+    });
 });
 
 const port = process.env.PORT || 3001;
