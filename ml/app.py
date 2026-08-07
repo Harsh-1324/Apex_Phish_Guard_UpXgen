@@ -1,7 +1,9 @@
 import os
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from huggingface_hub import hf_hub_download
+
 import joblib
 import numpy as np
 import pandas as pd
@@ -48,8 +50,13 @@ CORS(app)
 # Load Models
 # ============================================================
 
+print("Loading email model...")
 email_model = joblib.load(EMAIL_MODEL_PATH)
+
+print("Loading email TF-IDF...")
 email_tfidf = joblib.load(EMAIL_TFIDF_PATH)
+
+print("Loading URL model...")
 url_model = joblib.load(URL_MODEL_PATH)
 
 print("✓ All models loaded successfully")
@@ -117,7 +124,7 @@ def extract_url_features(url):
     # HTTPS check
     # --------------------------------------------------------
 
-    has_https = url.startswith("https")
+    has_https = url.lower().startswith("https")
 
     features["has_https"] = 1 if has_https else 0
 
@@ -145,7 +152,7 @@ def extract_url_features(url):
     ]
 
     for ext in suspicious_extensions:
-        if domain_part.endswith(ext):
+        if domain_part.lower().endswith(ext):
             analysis_details.append(
                 f"Suspicious domain extension ({ext})"
             )
@@ -155,13 +162,16 @@ def extract_url_features(url):
     # IP address check
     # --------------------------------------------------------
 
-    if domain_part and all(
-        part.isdigit() or part == "."
-        for part in domain_part
-    ):
-        analysis_details.append(
-            "URL uses IP address instead of domain name"
-        )
+    if domain_part:
+        parts = domain_part.split(".")
+
+        if (
+            len(parts) == 4
+            and all(part.isdigit() for part in parts)
+        ):
+            analysis_details.append(
+                "URL uses IP address instead of domain name"
+            )
 
     # --------------------------------------------------------
     # Suspicious keywords
@@ -181,7 +191,9 @@ def extract_url_features(url):
         if word in url.lower()
     ]
 
-    features["suspicious_keywords"] = len(matching_keywords)
+    features["suspicious_keywords"] = len(
+        matching_keywords
+    )
 
     if matching_keywords:
         analysis_details.append(
@@ -224,15 +236,12 @@ def extract_url_features(url):
 
 def explain_email(text):
 
-    tokens = text.lower().split()
+    text_lower = text.lower()
 
     matches = [
-        token
-        for token in tokens
-        if any(
-            word in token
-            for word in SUSPICIOUS_TOKENS
-        )
+        word
+        for word in SUSPICIOUS_TOKENS
+        if word in text_lower
     ]
 
     if matches:
@@ -278,15 +287,10 @@ def analyze_email(text):
     # Suspicious keywords
     # --------------------------------------------------------
 
-    tokens = text_lower.split()
-
     suspicious_matches = [
-        token
-        for token in tokens
-        if any(
-            word in token
-            for word in SUSPICIOUS_TOKENS
-        )
+        word
+        for word in SUSPICIOUS_TOKENS
+        if word in text_lower
     ]
 
     if suspicious_matches:
@@ -396,6 +400,16 @@ def predict():
 
     data = request.get_json(force=True)
 
+    if not data:
+        return jsonify({
+            "error": "No JSON data received"
+        }), 400
+
+    if "input" not in data or "type" not in data:
+        return jsonify({
+            "error": "Request must contain 'input' and 'type'"
+        }), 400
+
     input_text = str(
         data["input"]
     ).strip()
@@ -465,7 +479,6 @@ def predict():
         )
 
         if not analysis_details:
-
             analysis_details = [
                 "No suspicious indicators detected"
             ]
@@ -504,6 +517,7 @@ def predict():
         "details": details,
 
         "analysisDetails": analysis_details
+
     })
 
 
