@@ -47,19 +47,30 @@ CORS(app)
 
 
 # ============================================================
-# Load Models
+# Lazy-Loading Model Variables
 # ============================================================
 
-print("Loading email model...")
-email_model = joblib.load(EMAIL_MODEL_PATH)
+email_model = None
+email_tfidf = None
+url_model = None
+print("Models configured for lazy loading to optimize memory usage.")
 
-print("Loading email TF-IDF...")
-email_tfidf = joblib.load(EMAIL_TFIDF_PATH)
 
-print("Loading URL model...")
-url_model = joblib.load(URL_MODEL_PATH)
+def load_email_models():
+    global email_model, email_tfidf
+    if email_model is None:
+        print("Loading email model...")
+        email_model = joblib.load(EMAIL_MODEL_PATH)
+    if email_tfidf is None:
+        print("Loading email TF-IDF...")
+        email_tfidf = joblib.load(EMAIL_TFIDF_PATH)
 
-print("✓ All models loaded successfully")
+
+def load_url_model():
+    global url_model
+    if url_model is None:
+        print("Loading URL model...")
+        url_model = joblib.load(URL_MODEL_PATH)
 
 
 # ============================================================
@@ -422,6 +433,8 @@ def predict():
 
     if target_type == "email":
 
+        load_email_models()
+
         input_tfidf = email_tfidf.transform(
             [input_text]
         ).toarray()
@@ -451,6 +464,8 @@ def predict():
     # ========================================================
 
     elif target_type == "url":
+
+        load_url_model()
 
         url_features, analysis_details = (
             extract_url_features(input_text)
