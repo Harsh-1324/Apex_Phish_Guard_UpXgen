@@ -8,6 +8,13 @@ import joblib
 import numpy as np
 import pandas as pd
 
+import sklearn
+import lightgbm
+import numpy
+
+print("SCIKIT-LEARN VERSION:", sklearn.__version__)
+print("LIGHTGBM VERSION:", lightgbm.__version__)
+print("NUMPY VERSION:", numpy.__version__)
 
 # ============================================================
 # Hugging Face Model Configuration
