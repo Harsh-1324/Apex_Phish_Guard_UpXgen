@@ -8,7 +8,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const ML_API_URL = process.env.ML_API_URL || 'http://localhost:5000/predict';
+// Points to your live ML service on Render by default
+const ML_API_URL = process.env.ML_API_URL || 'https://phish-guard-ffxg.onrender.com/predict';
 
 app.post('/api/predict', async (req, res) => {
   try {
@@ -92,5 +93,5 @@ app.get('/api/health', (req, res) => {
 
 const port = process.env.PORT || 3001;
 app.listen(port, () => {
-  console.log(`PhishGuard backend listening on http://localhost:${port}`);
+  console.log(`PhishGuard backend listening on port ${port}`);
 });
