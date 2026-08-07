@@ -10,17 +10,13 @@ venv/
 # Environment
 .env
 .env.*
-
 # Database
 *.db
-
 # Build
 build/
 dist/
-
 # Logs
 *.log
-
 ml/models/
 *.joblib
 
