@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:3001/api/predict';
+const API_URL = 'https://phish-guard-backend-dv8z.onrender.com/api/predict';
 
 export async function predict(payload) {
   const response = await fetch(API_URL, {
@@ -16,7 +16,7 @@ export async function predict(payload) {
 }
 
 export async function getHistory(limit = 3) {
-  const response = await fetch(`http://localhost:3001/api/history?limit=${limit}`);
+  const response = await fetch(`https://phish-guard-backend-dv8z.onrender.com/api/history?limit=${limit}`);
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -27,7 +27,7 @@ export async function getHistory(limit = 3) {
 }
 
 export async function getAnalysisById(id) {
-  const response = await fetch(`http://localhost:3001/api/analysis/${id}`);
+  const response = await fetch(`https://phish-guard-backend-dv8z.onrender.com/api/analysis/${id}`);
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
