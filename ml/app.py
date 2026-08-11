@@ -1,8 +1,9 @@
+```python
 import os
-import threading
 
 import joblib
 import numpy as np
+import pandas as pd
 import sklearn
 import lightgbm
 
@@ -10,633 +11,568 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from huggingface_hub import hf_hub_download
 
-# ============================================================
 
+# ============================================================
 # VERSION INFORMATION
-
 # ============================================================
 
-print("SCIKIT-LEARN VERSION:", sklearn.**version**)
-print("LIGHTGBM VERSION:", lightgbm.**version**)
-print("NUMPY VERSION:", np.**version**)
+print("SCIKIT-LEARN VERSION:", sklearn.__version__)
+print("LIGHTGBM VERSION:", lightgbm.__version__)
+print("NUMPY VERSION:", np.__version__)
+
 
 # ============================================================
-
-# FLASK APPLICATION
-
-# ============================================================
-
-app = Flask(**name**)
-
-# Allow frontend/backend communication
-
-CORS(app)
-
-# ============================================================
-
-# CONFIGURATION
-
+# HUGGING FACE CONFIGURATION
 # ============================================================
 
 HF_REPO_ID = "vision-forge-1324/phishing-model"
 
-PORT = int(os.environ.get("PORT", 5000))
+print("PhishGuard ML API starting...")
+print("Hugging Face repository:", HF_REPO_ID)
+
 
 # ============================================================
-
-# MODEL STATE
-
+# FLASK APPLICATION
 # ============================================================
 
-# Model objects are loaded only when required.
+app = Flask(__name__)
+
+# Enable CORS for frontend/backend communication.
+CORS(app)
+
+
+# ============================================================
+# MODEL PATHS
+# ============================================================
+
+EMAIL_MODEL_PATH = None
+EMAIL_TFIDF_PATH = None
+URL_MODEL_PATH = None
+
+
+# ============================================================
+# LAZY-LOADED MODELS
+# ============================================================
+#
+# Models are NOT loaded when the application starts.
+# They are downloaded/loaded only when the corresponding
+# prediction endpoint is actually requested.
+#
+# This helps reduce startup memory usage.
+# ============================================================
 
 email_model = None
 email_tfidf = None
 url_model = None
 
-# Downloaded model paths
-
-email_model_path = None
-email_tfidf_path = None
-url_model_path = None
-
-# Locks prevent multiple Gunicorn requests from loading
-
-# the same model simultaneously.
-
-email_model_lock = threading.Lock()
-url_model_lock = threading.Lock()
 
 # ============================================================
-
 # SUSPICIOUS EMAIL TOKENS
-
 # ============================================================
 
 SUSPICIOUS_TOKENS = [
-"verify",
-"account",
-"password",
-"urgent",
-"click here",
-"security",
-"login",
-"confirm",
-"suspend",
-"update",
-"bank",
-"credit card",
-"reward",
-"limited",
-"action required",
-"invoice",
-"authenticate",
-"unusual activity"
+    "verify",
+    "account",
+    "password",
+    "urgent",
+    "click here",
+    "security",
+    "login",
+    "confirm",
+    "suspend",
+    "update",
+    "bank",
+    "credit card",
+    "reward",
+    "limited",
+    "action required",
+    "invoice",
+    "authenticate",
+    "unusual activity",
 ]
 
-# ============================================================
-
-# MODEL DOWNLOAD FUNCTIONS
 
 # ============================================================
-
-def get_email_model_path():
-"""
-Download the email classification model from Hugging Face
-only when it is actually required.
-"""
-
-```
-global email_model_path
-
-if email_model_path is None:
-    print("Downloading email_model.joblib from Hugging Face...")
-
-    email_model_path = hf_hub_download(
-        repo_id=HF_REPO_ID,
-        filename="email_model.joblib"
-    )
-
-    print("Email model downloaded successfully.")
-
-return email_model_path
-```
-
-def get_email_tfidf_path():
-"""
-Download the email TF-IDF vectorizer only when required.
-"""
-
-```
-global email_tfidf_path
-
-if email_tfidf_path is None:
-    print("Downloading email_tfidf.joblib from Hugging Face...")
-
-    email_tfidf_path = hf_hub_download(
-        repo_id=HF_REPO_ID,
-        filename="email_tfidf.joblib"
-    )
-
-    print("Email TF-IDF downloaded successfully.")
-
-return email_tfidf_path
-```
-
-def get_url_model_path():
-"""
-Download the URL classification model only when required.
-"""
-
-```
-global url_model_path
-
-if url_model_path is None:
-    print("Downloading url_model.joblib from Hugging Face...")
-
-    url_model_path = hf_hub_download(
-        repo_id=HF_REPO_ID,
-        filename="url_model.joblib"
-    )
-
-    print("URL model downloaded successfully.")
-
-return url_model_path
-```
-
+# MODEL FILE DOWNLOAD
 # ============================================================
 
-# MODEL LOADING
+def get_model_path(filename):
+    """
+    Download a model from Hugging Face if it is not already
+    available in the local Hugging Face cache.
+    """
 
+    print(f"Preparing model: {filename}")
+
+    return hf_hub_download(
+        repo_id=HF_REPO_ID,
+        filename=filename,
+    )
+
+
+# ============================================================
+# EMAIL MODEL LOADING
 # ============================================================
 
 def load_email_models():
-"""
-Load the email model and TF-IDF vectorizer into memory.
+    """
+    Lazily download and load the email model and TF-IDF
+    vectorizer.
+    """
 
-```
-Thread-safe lazy loading prevents unnecessary memory usage
-during application startup.
-"""
+    global email_model
+    global email_tfidf
+    global EMAIL_MODEL_PATH
+    global EMAIL_TFIDF_PATH
 
-global email_model, email_tfidf
+    if email_model is None:
 
-if email_model is None or email_tfidf is None:
-
-    with email_model_lock:
-
-        if email_model is None:
-
-            print("Loading email model...")
-
-            email_model = joblib.load(
-                get_email_model_path()
+        if EMAIL_MODEL_PATH is None:
+            EMAIL_MODEL_PATH = get_model_path(
+                "email_model.joblib"
             )
 
-            print("Email model loaded.")
+        print("Loading email model...")
+        email_model = joblib.load(
+            EMAIL_MODEL_PATH
+        )
 
-        if email_tfidf is None:
+        print("Email model loaded.")
 
-            print("Loading email TF-IDF vectorizer...")
+    if email_tfidf is None:
 
-            email_tfidf = joblib.load(
-                get_email_tfidf_path()
+        if EMAIL_TFIDF_PATH is None:
+            EMAIL_TFIDF_PATH = get_model_path(
+                "email_tfidf.joblib"
             )
 
-            print("Email TF-IDF vectorizer loaded.")
-```
+        print("Loading email TF-IDF...")
+        email_tfidf = joblib.load(
+            EMAIL_TFIDF_PATH
+        )
+
+        print("Email TF-IDF loaded.")
+
+
+# ============================================================
+# URL MODEL LOADING
+# ============================================================
 
 def load_url_model():
-"""
-Load the URL model into memory.
+    """
+    Lazily download and load the URL classification model.
+    """
 
-```
-Thread-safe lazy loading prevents unnecessary memory usage
-until URL scanning is actually requested.
-"""
+    global url_model
+    global URL_MODEL_PATH
 
-global url_model
+    if url_model is None:
 
-if url_model is None:
-
-    with url_model_lock:
-
-        if url_model is None:
-
-            print("Loading URL model...")
-
-            url_model = joblib.load(
-                get_url_model_path()
+        if URL_MODEL_PATH is None:
+            URL_MODEL_PATH = get_model_path(
+                "url_model.joblib"
             )
 
-            print("URL model loaded.")
-```
+        print("Loading URL model...")
 
-# ============================================================
-
-# URL FEATURE EXTRACTION
-
-# ============================================================
-
-def extract_url_features(url):
-"""
-Extract the same structural features used during
-URL model training.
-
-```
-IMPORTANT:
-The feature names and order must remain compatible
-with the trained model.
-"""
-
-analysis_details = []
-
-# --------------------------------------------------------
-# Basic URL parsing
-# --------------------------------------------------------
-
-parts = url.split("/")
-
-domain_part = ""
-
-if len(parts) > 2:
-    domain_part = parts[2]
-
-url_lower = url.lower()
-domain_lower = domain_part.lower()
-
-# --------------------------------------------------------
-# Features
-# --------------------------------------------------------
-
-url_length = len(url)
-
-domain_length = len(domain_part)
-
-num_dots = url.count(".")
-
-num_hyphens = url.count("-")
-
-num_slashes = url.count("/")
-
-num_at = url.count("@")
-
-num_question = url.count("?")
-
-has_https = 1 if url_lower.startswith("https") else 0
-
-suspicious_keywords = [
-    "verify",
-    "confirm",
-    "login",
-    "update",
-    "account"
-]
-
-matching_keywords = [
-    word
-    for word in suspicious_keywords
-    if word in url_lower
-]
-
-suspicious_keyword_count = len(
-    matching_keywords
-)
-
-# --------------------------------------------------------
-# Feature dictionary
-# --------------------------------------------------------
-
-features = {
-    "url_length": url_length,
-    "domain_length": domain_length,
-    "num_dots": num_dots,
-    "num_hyphens": num_hyphens,
-    "num_slashes": num_slashes,
-    "num_at": num_at,
-    "num_question": num_question,
-    "has_https": has_https,
-    "suspicious_keywords": suspicious_keyword_count
-}
-
-# --------------------------------------------------------
-# HTTPS analysis
-# --------------------------------------------------------
-
-if not has_https:
-
-    analysis_details.append(
-        "No HTTPS encryption"
-    )
-
-# --------------------------------------------------------
-# Suspicious domain extensions
-# --------------------------------------------------------
-
-suspicious_extensions = [
-    ".xyz",
-    ".tk",
-    ".ml",
-    ".ga",
-    ".info",
-    ".biz",
-    ".pw"
-]
-
-for extension in suspicious_extensions:
-
-    if domain_lower.endswith(extension):
-
-        analysis_details.append(
-            f"Suspicious domain extension ({extension})"
+        url_model = joblib.load(
+            URL_MODEL_PATH
         )
 
-        break
+        print("URL model loaded.")
 
-# --------------------------------------------------------
-# IP address detection
-# --------------------------------------------------------
-
-if domain_part:
-
-    ip_parts = domain_part.split(".")
-
-    if (
-        len(ip_parts) == 4
-        and all(part.isdigit() for part in ip_parts)
-    ):
-
-        analysis_details.append(
-            "URL uses IP address instead of domain name"
-        )
-
-# --------------------------------------------------------
-# Suspicious keywords
-# --------------------------------------------------------
-
-if matching_keywords:
-
-    analysis_details.append(
-        "Contains suspicious keywords: "
-        + ", ".join(matching_keywords)
-    )
-
-# --------------------------------------------------------
-# Long URL
-# --------------------------------------------------------
-
-if url_length > 75:
-
-    analysis_details.append(
-        "Unusually long URL"
-    )
-
-# --------------------------------------------------------
-# Multiple hyphens
-# --------------------------------------------------------
-
-if num_hyphens > 2:
-
-    analysis_details.append(
-        "Multiple hyphens in URL (subdomain obfuscation)"
-    )
-
-# --------------------------------------------------------
-# @ symbol
-# --------------------------------------------------------
-
-if num_at > 0:
-
-    analysis_details.append(
-        "Contains @ symbol (credential spoofing indicator)"
-    )
-
-return features, analysis_details
-```
 
 # ============================================================
-
 # EMAIL EXPLANATION
-
 # ============================================================
 
 def explain_email(text):
-"""
-Generate a short explanation based on suspicious
-phishing-related tokens.
-"""
+    """
+    Identify suspicious tokens present in the email.
+    """
 
-```
-text_lower = text.lower()
+    text_lower = text.lower()
 
-matches = [
-    word
-    for word in SUSPICIOUS_TOKENS
-    if word in text_lower
-]
+    matches = [
+        word
+        for word in SUSPICIOUS_TOKENS
+        if word in text_lower
+    ]
 
-if matches:
+    if matches:
 
-    return (
-        "Suspicious keywords detected: "
-        + ", ".join(sorted(set(matches)))
-    )
+        return (
+            "Suspicious keywords detected: "
+            + ", ".join(
+                sorted(set(matches))
+            )
+        )
 
-return "No obvious phishing tokens detected."
-```
+    return "No obvious phishing tokens detected."
+
 
 # ============================================================
-
 # DETAILED EMAIL ANALYSIS
-
 # ============================================================
 
 def analyze_email(text):
-"""
-Generate human-readable indicators explaining
-why an email may be suspicious.
-"""
+    """
+    Generate human-readable phishing indicators.
+    """
 
-```
-analysis_details = []
+    analysis_details = []
 
-text_lower = text.lower()
+    text_lower = text.lower()
 
-# --------------------------------------------------------
-# Urgent language
-# --------------------------------------------------------
+    # --------------------------------------------------------
+    # Urgent language
+    # --------------------------------------------------------
 
-urgent_words = [
-    "urgent",
-    "immediately",
-    "action required",
-    "limited time",
-    "act now"
-]
+    urgent_words = [
+        "urgent",
+        "immediately",
+        "action required",
+        "limited time",
+        "act now",
+    ]
 
-for word in urgent_words:
+    for word in urgent_words:
 
-    if word in text_lower:
+        if word in text_lower:
 
-        analysis_details.append(
-            f'Contains urgent language: "{word}"'
-        )
+            analysis_details.append(
+                f'Contains urgent language: "{word}"'
+            )
 
-        break
+            break
 
-# --------------------------------------------------------
-# Suspicious keywords
-# --------------------------------------------------------
+    # --------------------------------------------------------
+    # Suspicious keywords
+    # --------------------------------------------------------
 
-suspicious_matches = [
-    word
-    for word in SUSPICIOUS_TOKENS
-    if word in text_lower
-]
+    suspicious_matches = [
+        word
+        for word in SUSPICIOUS_TOKENS
+        if word in text_lower
+    ]
 
-if suspicious_matches:
+    if suspicious_matches:
 
-    unique_matches = sorted(
-        set(suspicious_matches)
-    )[:3]
-
-    analysis_details.append(
-        "Suspicious keywords detected: "
-        + ", ".join(unique_matches)
-    )
-
-# --------------------------------------------------------
-# Sensitive information requests
-# --------------------------------------------------------
-
-sensitive_requests = [
-    "password",
-    "credit card",
-    "social security",
-    "bank account",
-    "verify your",
-    "urgent",
-    "loan",
-    "repay",
-    "payment"
-]
-
-for request_word in sensitive_requests:
-
-    if request_word in text_lower:
+        unique_matches = sorted(
+            set(suspicious_matches)
+        )[:3]
 
         analysis_details.append(
-            f'Requests for sensitive information: "{request_word}"'
+            "Suspicious keywords detected: "
+            + ", ".join(unique_matches)
         )
 
-        break
+    # --------------------------------------------------------
+    # Sensitive information requests
+    # --------------------------------------------------------
 
-# --------------------------------------------------------
-# Links / attachments
-# --------------------------------------------------------
+    sensitive_requests = [
+        "password",
+        "credit card",
+        "social security",
+        "bank account",
+        "verify your",
+        "urgent",
+        "loan",
+        "repay",
+        "payment",
+    ]
 
-if (
-    "click here" in text_lower
-    or "download" in text_lower
-    or "attachment" in text_lower
-):
+    for req in sensitive_requests:
 
-    analysis_details.append(
-        "Contains request to click links or download attachments"
-    )
+        if req in text_lower:
 
-# --------------------------------------------------------
-# Impersonation
-# --------------------------------------------------------
+            analysis_details.append(
+                f'Requests for sensitive information: "{req}"'
+            )
 
-if (
-    "from" in text_lower
-    and any(
-        word in text_lower
-        for word in [
-            "admin",
-            "support",
-            "security",
-            "bank"
+            break
+
+    # --------------------------------------------------------
+    # Links / downloads / attachments
+    # --------------------------------------------------------
+
+    if (
+        "click here" in text_lower
+        or "download" in text_lower
+        or "attachment" in text_lower
+    ):
+
+        analysis_details.append(
+            "Contains request to click links or download attachments"
+        )
+
+    # --------------------------------------------------------
+    # Potential impersonation
+    # --------------------------------------------------------
+
+    if (
+        "from" in text_lower
+        and any(
+            word in text_lower
+            for word in [
+                "admin",
+                "support",
+                "security",
+                "bank",
+            ]
+        )
+    ):
+
+        analysis_details.append(
+            "Potential impersonation of legitimate organization"
+        )
+
+    # --------------------------------------------------------
+    # Default response
+    # --------------------------------------------------------
+
+    if not analysis_details:
+
+        analysis_details = [
+            "No obvious phishing indicators detected"
         ]
+
+    return analysis_details
+
+
+# ============================================================
+# URL FEATURE EXTRACTION
+# ============================================================
+
+def extract_url_features(url):
+    """
+    Extract the same structural URL features used by the
+    trained URL model.
+
+    IMPORTANT:
+    The feature names and structure should remain identical
+    to those used during model training.
+    """
+
+    features = {}
+    analysis_details = []
+
+    # --------------------------------------------------------
+    # Length
+    # --------------------------------------------------------
+
+    features["url_length"] = len(url)
+
+    # --------------------------------------------------------
+    # Domain
+    # --------------------------------------------------------
+
+    url_parts = url.split("/")
+
+    domain_part = (
+        url_parts[2]
+        if len(url_parts) > 2
+        else ""
     )
-):
 
-    analysis_details.append(
-        "Potential impersonation of legitimate organization"
+    features["domain_length"] = len(
+        domain_part
     )
 
-# --------------------------------------------------------
-# No indicators
-# --------------------------------------------------------
+    # --------------------------------------------------------
+    # Character counts
+    # --------------------------------------------------------
 
-if not analysis_details:
+    features["num_dots"] = url.count(".")
+    features["num_hyphens"] = url.count("-")
+    features["num_slashes"] = url.count("/")
+    features["num_at"] = url.count("@")
+    features["num_question"] = url.count("?")
 
-    analysis_details = [
-        "No obvious phishing indicators detected"
+    # --------------------------------------------------------
+    # HTTPS
+    # --------------------------------------------------------
+
+    has_https = url.lower().startswith(
+        "https"
+    )
+
+    features["has_https"] = (
+        1 if has_https else 0
+    )
+
+    if not has_https:
+
+        analysis_details.append(
+            "No HTTPS encryption"
+        )
+
+    # --------------------------------------------------------
+    # Suspicious extensions
+    # --------------------------------------------------------
+
+    suspicious_extensions = [
+        ".xyz",
+        ".tk",
+        ".ml",
+        ".ga",
+        ".info",
+        ".biz",
+        ".pw",
     ]
 
-return analysis_details
-```
+    domain_lower = domain_part.lower()
 
-# ============================================================
+    for ext in suspicious_extensions:
 
-# ROOT ENDPOINT
+        if domain_lower.endswith(ext):
 
-# ============================================================
+            analysis_details.append(
+                f"Suspicious domain extension ({ext})"
+            )
 
-@app.route("/", methods=["GET"])
-def root():
+            break
 
-```
-return jsonify({
-    "service": "PhishGuard ML API",
-    "status": "online",
-    "version": "1.0",
-    "endpoints": [
-        "/",
-        "/health",
-        "/predict"
+    # --------------------------------------------------------
+    # IP address
+    # --------------------------------------------------------
+
+    if domain_part:
+
+        domain_without_port = (
+            domain_part.split(":")[0]
+        )
+
+        parts = domain_without_port.split(".")
+
+        if (
+            len(parts) == 4
+            and all(
+                part.isdigit()
+                for part in parts
+            )
+            and all(
+                0 <= int(part) <= 255
+                for part in parts
+            )
+        ):
+
+            analysis_details.append(
+                "URL uses IP address instead of domain name"
+            )
+
+    # --------------------------------------------------------
+    # Suspicious keywords
+    # --------------------------------------------------------
+
+    suspicious_keywords = [
+        "verify",
+        "confirm",
+        "login",
+        "update",
+        "account",
     ]
-})
-```
+
+    matching_keywords = [
+        word
+        for word in suspicious_keywords
+        if word in url.lower()
+    ]
+
+    features["suspicious_keywords"] = len(
+        matching_keywords
+    )
+
+    if matching_keywords:
+
+        analysis_details.append(
+            "Contains suspicious keywords: "
+            + ", ".join(
+                matching_keywords
+            )
+        )
+
+    # --------------------------------------------------------
+    # Long URL
+    # --------------------------------------------------------
+
+    if features["url_length"] > 75:
+
+        analysis_details.append(
+            "Unusually long URL"
+        )
+
+    # --------------------------------------------------------
+    # Multiple hyphens
+    # --------------------------------------------------------
+
+    if features["num_hyphens"] > 2:
+
+        analysis_details.append(
+            "Multiple hyphens in URL (subdomain obfuscation)"
+        )
+
+    # --------------------------------------------------------
+    # @ symbol
+    # --------------------------------------------------------
+
+    if features["num_at"] > 0:
+
+        analysis_details.append(
+            "Contains @ symbol (credential spoofing indicator)"
+        )
+
+    return features, analysis_details
+
 
 # ============================================================
-
 # HEALTH CHECK
-
 # ============================================================
 
 @app.route("/health", methods=["GET"])
 def health():
 
-```
-return jsonify({
-    "status": "PhishGuard ML API is ready",
-    "models": {
-        "email": "lazy-loaded",
-        "url": "lazy-loaded"
-    }
-})
-```
+    return jsonify({
+        "status": "PhishGuard ML API is ready",
+        "models": [
+            "email (soft voting ensemble)",
+            "url (soft voting ensemble)",
+        ],
+    })
+
 
 # ============================================================
+# ROOT ENDPOINT
+# ============================================================
 
+@app.route("/", methods=["GET"])
+def root():
+
+    return jsonify({
+        "service": "PhishGuard ML API",
+        "status": "running",
+        "endpoints": [
+            "/health",
+            "/predict",
+        ],
+    })
+
+
+# ============================================================
 # PREDICTION ENDPOINT
-
 # ============================================================
 
 @app.route("/predict", methods=["POST"])
 def predict():
 
-```
-try:
+    # --------------------------------------------------------
+    # Validate JSON
+    # --------------------------------------------------------
 
-    # ----------------------------------------------------
-    # JSON validation
-    # ----------------------------------------------------
-
-    data = request.get_json(silent=True)
+    data = request.get_json(
+        silent=True
+    )
 
     if not data:
 
@@ -644,16 +580,17 @@ try:
             "error": "No JSON data received"
         }), 400
 
-    if "input" not in data:
+    # --------------------------------------------------------
+    # Validate required fields
+    # --------------------------------------------------------
+
+    if (
+        "input" not in data
+        or "type" not in data
+    ):
 
         return jsonify({
-            "error": "Request must contain 'input'"
-        }), 400
-
-    if "type" not in data:
-
-        return jsonify({
-            "error": "Request must contain 'type'"
+            "error": "Request must contain 'input' and 'type'"
         }), 400
 
     input_text = str(
@@ -664,37 +601,44 @@ try:
         data["type"]
     ).lower().strip()
 
+    # --------------------------------------------------------
+    # Empty input
+    # --------------------------------------------------------
+
     if not input_text:
 
         return jsonify({
             "error": "Input cannot be empty"
         }), 400
 
-    # ====================================================
+    # ========================================================
     # EMAIL PREDICTION
-    # ====================================================
+    # ========================================================
 
     if target_type == "email":
 
         load_email_models()
 
-        # Transform email using the trained TF-IDF vectorizer
+        # TF-IDF transformation
         input_tfidf = email_tfidf.transform(
             [input_text]
         )
 
+        # Prediction
         prediction = email_model.predict(
             input_tfidf
         )[0]
 
-        probabilities = email_model.predict_proba(
+        # Probability
+        proba = email_model.predict_proba(
             input_tfidf
         )
 
         confidence = float(
-            np.max(probabilities) * 100
+            np.max(proba) * 100
         )
 
+        # Explanation
         details = explain_email(
             input_text
         )
@@ -703,39 +647,39 @@ try:
             input_text
         )
 
-    # ====================================================
+    # ========================================================
     # URL PREDICTION
-    # ====================================================
+    # ========================================================
 
     elif target_type == "url":
 
         load_url_model()
 
+        # Extract features
         url_features, analysis_details = (
-            extract_url_features(input_text)
+            extract_url_features(
+                input_text
+            )
         )
 
-        # IMPORTANT:
-        # Use a list-of-dicts instead of pandas DataFrame.
-        # This avoids loading pandas just for one prediction.
-        #
-        # If your trained LightGBM model requires a DataFrame
-        # because it was trained with feature names, the model
-        # may require pandas here. In that case, keep pandas
-        # in requirements.txt and replace this section with:
-        #
-        # url_features_input = pd.DataFrame([url_features])
+        # Keep feature structure identical
+        # to the trained model.
+        url_features_df = pd.DataFrame(
+            [url_features]
+        )
 
+        # Prediction
         prediction = url_model.predict(
-            [list(url_features.values())]
+            url_features_df
         )[0]
 
-        probabilities = url_model.predict_proba(
-            [list(url_features.values())]
+        # Probability
+        proba = url_model.predict_proba(
+            url_features_df
         )
 
         confidence = float(
-            np.max(probabilities) * 100
+            np.max(proba) * 100
         )
 
         details = (
@@ -750,19 +694,22 @@ try:
                 "No suspicious indicators detected"
             ]
 
-    # ====================================================
+    # ========================================================
     # INVALID TYPE
-    # ====================================================
+    # ========================================================
 
     else:
 
         return jsonify({
-            "error": "Invalid type. Use 'email' or 'url'."
+            "error": (
+                "Invalid type. "
+                "Use 'email' or 'url'."
+            )
         }), 400
 
-    # ====================================================
-    # RESPONSE
-    # ====================================================
+    # ========================================================
+    # API RESPONSE
+    # ========================================================
 
     return jsonify({
 
@@ -770,7 +717,9 @@ try:
 
         "input": input_text,
 
-        "isPhishing": bool(prediction),
+        "isPhishing": bool(
+            prediction
+        ),
 
         "confidence": round(
             confidence,
@@ -783,39 +732,51 @@ try:
 
         "details": details,
 
-        "analysisDetails": analysis_details
-
+        "analysisDetails": analysis_details,
     })
 
-except Exception as error:
+
+# ============================================================
+# ERROR HANDLERS
+# ============================================================
+
+@app.errorhandler(413)
+def request_too_large(error):
+
+    return jsonify({
+        "error": "Request payload is too large."
+    }), 413
+
+
+@app.errorhandler(500)
+def internal_error(error):
 
     print(
-        "Prediction error:",
-        repr(error)
+        "Internal server error:",
+        error
     )
 
     return jsonify({
-        "error": "Prediction failed",
-        "message": str(error)
+        "error": "Internal server error."
     }), 500
-```
+
 
 # ============================================================
-
-# APPLICATION STARTUP
-
+# LOCAL DEVELOPMENT
 # ============================================================
 
-if **name** == "**main**":
+if __name__ == "__main__":
 
-```
-print(
-    f"Starting PhishGuard ML API on port {PORT}..."
-)
+    port = int(
+        os.environ.get(
+            "PORT",
+            5000
+        )
+    )
 
-app.run(
-    host="0.0.0.0",
-    port=PORT,
-    debug=False
-)
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=False
+    )
 ```
