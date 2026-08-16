@@ -1,9 +1,56 @@
-const API_URL = 'https://phish-guard-backend-dv8z.onrender.com/api/predict';
+const API_URL = 'https://phish-guard-backend-dv8z.onrender.com/api';
 
-export async function predict(payload) {
-  const response = await fetch(API_URL, {
+// Auth functions
+export async function signup(email, password) {
+  const response = await fetch(`${API_URL}/auth/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Signup failed');
+  }
+
+  return response.json();
+}
+
+export async function login(email, password) {
+  const response = await fetch(`${API_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'Login failed');
+  }
+
+  return response.json();
+}
+
+export async function getCurrentUser(token) {
+  const response = await fetch(`${API_URL}/auth/me`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to get current user');
+  }
+
+  return response.json();
+}
+
+// Predict function
+export async function predict(payload, token) {
+  const response = await fetch(`${API_URL}/predict`, {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
     body: JSON.stringify(payload),
   });
 
@@ -15,8 +62,11 @@ export async function predict(payload) {
   return response.json();
 }
 
-export async function getHistory(limit = 3) {
-  const response = await fetch(`https://phish-guard-backend-dv8z.onrender.com/api/history?limit=${limit}`);
+// History function
+export async function getHistory(limit = 3, token) {
+  const response = await fetch(`${API_URL}/history?limit=${limit}`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -26,8 +76,11 @@ export async function getHistory(limit = 3) {
   return response.json();
 }
 
-export async function getAnalysisById(id) {
-  const response = await fetch(`https://phish-guard-backend-dv8z.onrender.com/api/analysis/${id}`);
+// Get analysis by ID
+export async function getAnalysisById(id, token) {
+  const response = await fetch(`${API_URL}/analysis/${id}`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));

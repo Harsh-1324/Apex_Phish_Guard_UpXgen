@@ -2,15 +2,20 @@ const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
 const { saveAnalysis, getAnalysisHistory, getAnalysisById } = require('./database');
+const { router: authRouter, verifyToken } = require('./auth');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Auth routes
+app.use('/api/auth', authRouter);
+
 // Points to your live ML service on Render by default
 const ML_API_URL = process.env.ML_API_URL || 'https://phish-guard-ffxg.onrender.com/predict';
 
-app.post('/api/predict', async (req, res) => {
+// Protected predict endpoint
+app.post('/api/predict', verifyToken, async (req, res) => {
   try {
     const { text, url } = req.body;
     if ((!text || !text.trim()) && (!url || !url.trim())) {
@@ -51,8 +56,8 @@ app.post('/api/predict', async (req, res) => {
   }
 });
 
-// Get analysis history
-app.get('/api/history', async (req, res) => {
+// Get analysis history (protected)
+app.get('/api/history', verifyToken, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
     const history = await getAnalysisHistory(limit);
@@ -63,8 +68,8 @@ app.get('/api/history', async (req, res) => {
   }
 });
 
-// Get specific analysis by ID
-app.get('/api/analysis/:id', async (req, res) => {
+// Get specific analysis by ID (protected)
+app.get('/api/analysis/:id', verifyToken, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const analysis = await getAnalysisById(id);

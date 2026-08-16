@@ -11,7 +11,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 async function initDatabase() {
-  const createTable = `
+  const createAnalysesTable = `
     CREATE TABLE IF NOT EXISTS analyses (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       type TEXT NOT NULL,
@@ -23,14 +23,30 @@ async function initDatabase() {
     )
   `;
 
+  const createUsersTable = `
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `;
+
   return new Promise((resolve, reject) => {
-    db.run(createTable, (err) => {
+    db.run(createAnalysesTable, (err) => {
       if (err) {
-        console.error('Error creating SQLite table:', err);
+        console.error('Error creating analyses table:', err);
         reject(err);
       } else {
-        console.log('SQLite database initialized successfully.');
-        resolve();
+        db.run(createUsersTable, (err) => {
+          if (err) {
+            console.error('Error creating users table:', err);
+            reject(err);
+          } else {
+            console.log('SQLite database initialized successfully.');
+            resolve();
+          }
+        });
       }
     });
   });
@@ -103,8 +119,39 @@ process.on('exit', () => {
   });
 });
 
+// User authentication functions
+async function createUser(email, hashedPassword) {
+  const query = `INSERT INTO users (email, password) VALUES (?, ?)`;
+
+  return new Promise((resolve, reject) => {
+    db.run(query, [email, hashedPassword], function (err) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve({ id: this.lastID, email });
+      }
+    });
+  });
+}
+
+async function getUserByEmail(email) {
+  const query = `SELECT id, email, password FROM users WHERE email = ?`;
+
+  return new Promise((resolve, reject) => {
+    db.get(query, [email], (err, row) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row || null);
+      }
+    });
+  });
+}
+
 module.exports = {
   saveAnalysis,
   getAnalysisHistory,
   getAnalysisById,
+  createUser,
+  getUserByEmail,
 };

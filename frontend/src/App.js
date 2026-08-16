@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import AlertPopup from './components/AlertPopup';
 import ResultPanel from './components/ResultPanel';
 import HistoryCard from './components/HistoryCard';
+import Login from './components/Login';
+import Signup from './components/Signup';
+import { useAuth } from './components/AuthContext';
 import { predict, getHistory } from './utils/api';
 import './App.css';
 
@@ -26,7 +29,7 @@ const highlightText = (content) => {
   return safe.replace(regex, '<span class="highlight">$1</span>');
 };
 
-function App() {
+function AppContent() {
   const [mode, setMode] = useState('email');
   const [textInput, setTextInput] = useState('');
   const [urlInput, setUrlInput] = useState('');
@@ -34,15 +37,16 @@ function App() {
   const [alert, setAlert] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
+  const { user, token, logout } = useAuth();
 
   // Load history on component mount
   useEffect(() => {
     loadHistory();
-  }, []);
+  }, [token]);
 
   const loadHistory = async () => {
     try {
-      const historyData = await getHistory(3);
+      const historyData = await getHistory(3, token);
       setHistory(historyData);
     } catch (error) {
       console.error('Failed to load history:', error);
@@ -67,7 +71,7 @@ function App() {
 
     setLoading(true);
     try {
-      const prediction = await predict(payload);
+      const prediction = await predict(payload, token);
       setResult(prediction);
 
       // Reload history after analysis (since it's saved to database)
@@ -102,6 +106,16 @@ function App() {
 
   return (
     <div className="app-shell">
+      <div className="app-header">
+        <div className="app-header-left">
+          <h1>PhishGuard</h1>
+        </div>
+        <div className="app-header-right">
+          <span className="user-email">{user?.email}</span>
+          <button className="logout-btn" onClick={logout}>Logout</button>
+        </div>
+      </div>
+
       <div className="hero-panel">
         <div className="hero-copy">
           <div className="eyebrow">PhishGuard</div>
@@ -213,6 +227,25 @@ function App() {
       {alert && <AlertPopup message={alert.message} type={alert.type} />}
     </div>
   );
+}
+
+function App() {
+  const { token, loading } = useAuth();
+  const [showSignup, setShowSignup] = useState(false);
+
+  if (loading) {
+    return <div style={{ textAlign: 'center', marginTop: '50px' }}>Loading...</div>;
+  }
+
+  if (!token) {
+    return showSignup ? (
+      <Signup onSwitchToLogin={() => setShowSignup(false)} />
+    ) : (
+      <Login onSwitchToSignup={() => setShowSignup(true)} />
+    );
+  }
+
+  return <AppContent />;
 }
 
 export default App;
