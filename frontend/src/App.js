@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import AlertPopup from './components/AlertPopup';
 import ResultPanel from './components/ResultPanel';
 import HistoryCard from './components/HistoryCard';
@@ -39,19 +39,20 @@ function AppContent() {
   const [loading, setLoading] = useState(false);
   const { user, token, logout } = useAuth();
 
-  // Load history on component mount
-  useEffect(() => {
-    loadHistory();
-  }, [token]);
-
-  const loadHistory = async () => {
+  // Load history
+  const loadHistory = useCallback(async () => {
     try {
       const historyData = await getHistory(3, token);
       setHistory(historyData);
     } catch (error) {
       console.error('Failed to load history:', error);
     }
-  };
+  }, [token]);
+
+  // Load history when token changes
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
 
   const showAlert = (message, type = 'info') => {
     setAlert({ message, type });
@@ -59,32 +60,50 @@ function AppContent() {
   };
 
   const handleAnalyze = async () => {
-    const payload = mode === 'email' ? { text: textInput } : { url: urlInput };
+    const payload = mode === 'email'
+      ? { text: textInput }
+      : { url: urlInput };
 
     if (!payload.text && !payload.url) {
-      return showAlert('Enter email content or URL before scanning.', 'warning');
+      return showAlert(
+        'Enter email content or URL before scanning.',
+        'warning'
+      );
     }
 
     if (mode === 'url' && !payload.url.startsWith('http')) {
-      return showAlert('Include http:// or https:// for URL checks.', 'warning');
+      return showAlert(
+        'Include http:// or https:// for URL checks.',
+        'warning'
+      );
     }
 
     setLoading(true);
+
     try {
       const prediction = await predict(payload, token);
       setResult(prediction);
 
-      // Reload history after analysis (since it's saved to database)
+      // Reload history after analysis
       await loadHistory();
 
       if (prediction.isPhishing) {
-        showAlert('Phishing detected — stay alert and do not click suspicious links.', 'danger');
+        showAlert(
+          'Phishing detected — stay alert and do not click suspicious links.',
+          'danger'
+        );
       } else {
-        showAlert('Safe content detected. Keep your guard up!', 'success');
+        showAlert(
+          'Safe content detected. Keep your guard up!',
+          'success'
+        );
       }
     } catch (error) {
       console.error(error);
-      showAlert('Unable to connect to the backend. Check servers and try again.', 'danger');
+      showAlert(
+        'Unable to connect to the backend. Check servers and try again.',
+        'danger'
+      );
     } finally {
       setLoading(false);
     }
@@ -110,50 +129,85 @@ function AppContent() {
         <div className="app-header-left">
           <h1>PhishGuard</h1>
         </div>
+
         <div className="app-header-right">
           <span className="user-email">{user?.email}</span>
-          <button className="logout-btn" onClick={logout}>Logout</button>
+          <button className="logout-btn" onClick={logout}>
+            Logout
+          </button>
         </div>
       </div>
 
       <div className="hero-panel">
         <div className="hero-copy">
           <div className="eyebrow">PhishGuard</div>
-          <h1>Stop phishing attacks before they hit your inbox.</h1>
+
+          <h1>
+            Stop phishing attacks before they hit your inbox.
+          </h1>
+
           <p>
-            Real-time phishing analysis with confidence scoring, suspicious keyword
-            highlighting, and instant explanation for every prediction.
+            Real-time phishing analysis with confidence scoring,
+            suspicious keyword highlighting, and instant explanation
+            for every prediction.
           </p>
+
           <div className="hero-actions">
-            <button className="button button-primary" onClick={handleAnalyze} disabled={loading}>
+            <button
+              className="button button-primary"
+              onClick={handleAnalyze}
+              disabled={loading}
+            >
               {loading ? 'Analyzing...' : 'Run Scan'}
             </button>
-            <button className="button button-outline" onClick={handleUseExample}>
+
+            <button
+              className="button button-outline"
+              onClick={handleUseExample}
+            >
               Load Example
             </button>
           </div>
+
           <div className="pill-row">
             <span>AI + TF-IDF</span>
             <span>Random Forest URL checks</span>
             <span>Confidence & alerts</span>
           </div>
         </div>
+
         <div className="hero-card">
           <div className="hero-card-top">
             <div>
               <span className="tiny-label">Attack type</span>
-              <h2>{mode === 'email' ? 'Email Phishing Scan' : 'URL Threat Scan'}</h2>
+              <h2>
+                {mode === 'email'
+                  ? 'Email Phishing Scan'
+                  : 'URL Threat Scan'}
+              </h2>
             </div>
+
             <div className="toggle-pill">
-              <button className={mode === 'email' ? 'active' : ''} onClick={() => setMode('email')}>
+              <button
+                className={mode === 'email' ? 'active' : ''}
+                onClick={() => setMode('email')}
+              >
                 Email
               </button>
-              <button className={mode === 'url' ? 'active' : ''} onClick={() => setMode('url')}>
+
+              <button
+                className={mode === 'url' ? 'active' : ''}
+                onClick={() => setMode('url')}
+              >
                 URL
               </button>
             </div>
           </div>
-          <label className="input-label">{mode === 'email' ? 'Email content' : 'URL to analyze'}</label>
+
+          <label className="input-label">
+            {mode === 'email' ? 'Email content' : 'URL to analyze'}
+          </label>
+
           {mode === 'email' ? (
             <textarea
               className="input-field"
@@ -170,9 +224,17 @@ function AppContent() {
               onChange={(event) => setUrlInput(event.target.value)}
             />
           )}
+
           <div className="input-footer">
-            <span className="hint-text">Suspicious phrases are highlighted in the result panel.</span>
-            <button className="link-button" type="button" onClick={clearForm}>
+            <span className="hint-text">
+              Suspicious phrases are highlighted in the result panel.
+            </span>
+
+            <button
+              className="link-button"
+              type="button"
+              onClick={clearForm}
+            >
               Clear input
             </button>
           </div>
@@ -186,12 +248,15 @@ function AppContent() {
             mode={mode}
             highlightText={highlightText}
           />
+
           <div className="explain-card">
             <h3>Why PhishGuard trusts this result</h3>
+
             <p>
-              Every prediction is backed by model confidence, feature analysis, and
-              a threat explanation so you can act with clarity.
+              Every prediction is backed by model confidence, feature
+              analysis, and a threat explanation so you can act with clarity.
             </p>
+
             <ul>
               <li>Confidence score from the ML model</li>
               <li>Keyword and URL pattern inspection</li>
@@ -208,23 +273,36 @@ function AppContent() {
                 <p>Most recent 3 analysis sessions</p>
               </div>
             </div>
+
             {history.length === 0 ? (
-              <p className="muted-text">No scans yet. Run a check to see recent results here.</p>
+              <p className="muted-text">
+                No scans yet. Run a check to see recent results here.
+              </p>
             ) : (
-              history.map((item) => <HistoryCard key={item.id} item={item} />)
+              history.map((item) => (
+                <HistoryCard key={item.id} item={item} />
+              ))
             )}
           </div>
+
           <div className="insight-box">
             <h4>Security insight</h4>
+
             <p>
-              Phishing attackers often use urgency, familiar brand names, and hidden redirects.
-              Watch for any anomalies before entering credentials.
+              Phishing attackers often use urgency, familiar brand names,
+              and hidden redirects. Watch for any anomalies before entering
+              credentials.
             </p>
           </div>
         </div>
       </div>
 
-      {alert && <AlertPopup message={alert.message} type={alert.type} />}
+      {alert && (
+        <AlertPopup
+          message={alert.message}
+          type={alert.type}
+        />
+      )}
     </div>
   );
 }
@@ -234,7 +312,11 @@ function App() {
   const [showSignup, setShowSignup] = useState(false);
 
   if (loading) {
-    return <div style={{ textAlign: 'center', marginTop: '50px' }}>Loading...</div>;
+    return (
+      <div style={{ textAlign: 'center', marginTop: '50px' }}>
+        Loading...
+      </div>
+    );
   }
 
   if (!token) {
